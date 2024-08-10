@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:labs
 
 ARG GO_VERSION="1.22"
-ARG TESTDOMAIN="navalny.com"
-ARG TESTVIDEO="https://www.youtube.com/watch?v=2oQZpxtqi08"
-ARG TESTVIDEODOMAIN="www.youtube.com"
+ARG TESTDOMAIN="btdig.com"
+#ARG TESTVIDEO="https://www.youtube.com/watch?v=2oQZpxtqi08"
+#ARG TESTVIDEODOMAIN="www.youtube.com"
 
 ###
 ### TEST 
@@ -14,28 +14,31 @@ ARG TESTVIDEODOMAIN
 
 ADD --link . /pnproxy
 WORKDIR /pnproxy
-RUN apk --no-cache add curl gcc musl-dev yt-dlp
+RUN apk --no-cache add curl gcc musl-dev #yt-dlp
 RUN CGO_ENABLED=1 go build && cp pnproxy /usr/local/bin/ && go clean -cache -modcache 
 
 COPY <<EOF /etc/pnproxy.yaml
+log:
+  level: trace
+
 hosts:
   test: ${TESTDOMAIN}
-  testvideo: ${TESTVIDEODOMAIN}
+#  testvideo: ${TESTVIDEODOMAIN}
 
 dns:
   listen: ":53"
   rules:
-    - name: test testvideo
+    - name: test #testvideo
       action: static address 127.0.0.1 
   default:
-    action: doh provider cloudflare cache true
+    action: doh provider quad9 cache true
 tls:
   listen: ":443"
   rules:
     - name: test 
       action: split_pass sleep 100/1ms
-    - name: testvideo
-      action: host_obfuscate
+#    - name: testvideo
+#      action: host_obfuscate
 EOF
 
 COPY --chmod=755 <<EOF /usr/local/bin/test.sh
@@ -45,8 +48,9 @@ pnproxy -config /etc/pnproxy.yaml &
 
 sleep 3
 
-export OLDRESOLVCONF=$(cat /etc/resolv.conf)
+#export OLDRESOLVCONF=$(cat /etc/resolv.conf)
 
+echo -e "nameserver 8.8.8.8\nnameserver 4.1.1.2" > /etc/resolv.conf
 echo "Testing access without pnproxy:"
 curl --connect-timeout 5 -I https://${TESTDOMAIN}
 
@@ -54,7 +58,7 @@ echo "nameserver 127.0.0.1" > /etc/resolv.conf
 
 echo "Testing access with pnproxy:"
 curl --connect-timeout 5 -I https://${TESTDOMAIN}
-
+exit
 echo "Testing video with pnproxy:"
 yt-dlp --force-overwrites 'https://www.youtube.com/watch?v=2oQZpxtqi08'
 
